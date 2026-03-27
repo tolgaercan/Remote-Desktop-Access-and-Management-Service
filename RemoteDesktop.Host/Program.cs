@@ -133,6 +133,8 @@ static void HandleInputPacket(PacketType packetType, byte[] payload)
         case PacketType.TextInput:
         {
             string text = RemoteProtocol.ParseTextInputPayload(payload);
+            // Mac Option sends Alt KeyDown before character; Unicode + Alt down breaks '#' etc.
+            ReleaseModifiersBeforeUnicodeText();
             SendUnicodeText(text);
             break;
         }
@@ -217,6 +219,19 @@ static void SendKeyboard(int virtualKey, bool keyUp)
     };
 
     SendInput(1, [input], Marshal.SizeOf<INPUT>());
+}
+
+/// <summary>
+/// Clears modifier state so KEYEVENTF_UNICODE is not combined with Alt/Ctrl/Shift (e.g. Mac Option+#).
+/// </summary>
+static void ReleaseModifiersBeforeUnicodeText()
+{
+    const int VK_SHIFT = 0x10;
+    const int VK_CONTROL = 0x11;
+    const int VK_MENU = 0x12;
+    SendKeyboard(VK_MENU, keyUp: true);
+    SendKeyboard(VK_CONTROL, keyUp: true);
+    SendKeyboard(VK_SHIFT, keyUp: true);
 }
 
 static void SendMouseWheel(int delta)
