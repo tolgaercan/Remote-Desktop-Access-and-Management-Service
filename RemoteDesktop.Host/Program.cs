@@ -248,6 +248,7 @@ static void SendUnicodeText(string text)
             {
                 ki = new KEYBDINPUT
                 {
+                    wVk = 0,
                     wScan = ch,
                     dwFlags = KEYEVENTF_UNICODE
                 }
@@ -261,6 +262,7 @@ static void SendUnicodeText(string text)
             {
                 ki = new KEYBDINPUT
                 {
+                    wVk = 0,
                     wScan = ch,
                     dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
                 }

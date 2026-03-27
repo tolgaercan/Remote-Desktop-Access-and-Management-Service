@@ -21,6 +21,8 @@ public partial class MainWindow : Window
     private Size _remoteFrameSize = default;
     private long _lastMouseMoveAt;
     private int _renderBusy;
+    /// <summary>TickCount64 when we sent '#' from Option+Digit3 to avoid duplicate TextInput.</summary>
+    private long _lastHashSentFromOptionDigit3Ticks;
 
     public MainWindow()
     {
@@ -174,11 +176,21 @@ public partial class MainWindow : Window
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
-        // Turkish Mac layout: '#' is commonly Option+3.
-        // Send it as text directly to avoid modifier mapping conflicts.
-        if (e.Key == Key.D3 && (e.KeyModifiers & KeyModifiers.Alt) != 0)
+        // Avalonia: layout-aware character (e.g. Turkish Mac Option+3 -> "#") even when Key/Alt matching fails.
+        if (e.KeySymbol == "#")
         {
             _ = SendPacketAsync(PacketType.TextInput, RemoteProtocol.BuildTextInputPayload("#"));
+            _lastHashSentFromOptionDigit3Ticks = Environment.TickCount64;
+            e.Handled = true;
+            return;
+        }
+
+        // macOS: Option+3 -> '#'. PhysicalKey + Alt fallback.
+        if (IsOptionWithDigit3ForHash(e))
+        {
+            _ = SendPacketAsync(PacketType.TextInput, RemoteProtocol.BuildTextInputPayload("#"));
+            _lastHashSentFromOptionDigit3Ticks = Environment.TickCount64;
+            e.Handled = true;
             return;
         }
 
@@ -206,7 +218,7 @@ public partial class MainWindow : Window
 
     private void MainWindow_KeyUp(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.D3 && (e.KeyModifiers & KeyModifiers.Alt) != 0)
+        if (IsOptionWithDigit3ForHash(e))
         {
             return;
         }
@@ -237,7 +249,28 @@ public partial class MainWindow : Window
             return;
         }
 
+        // KeyDown already sent '#' for Option+Digit3; TextInput may still fire on macOS.
+        if (e.Text == "#" && Environment.TickCount64 - _lastHashSentFromOptionDigit3Ticks < 120)
+        {
+            return;
+        }
+
         _ = SendPacketAsync(PacketType.TextInput, RemoteProtocol.BuildTextInputPayload(e.Text));
+    }
+
+    private static bool IsOptionWithDigit3ForHash(KeyEventArgs e)
+    {
+        if ((e.KeyModifiers & KeyModifiers.Alt) == 0)
+        {
+            return false;
+        }
+
+        if (e.PhysicalKey == PhysicalKey.Digit3)
+        {
+            return true;
+        }
+
+        return e.Key == Key.D3;
     }
 
     private void ScreenImage_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
