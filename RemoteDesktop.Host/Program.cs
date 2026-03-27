@@ -12,9 +12,12 @@ const long jpegQuality = 55L;
 
 int port = args.Length > 0 && int.TryParse(args[0], out int parsedPort) ? parsedPort : defaultPort;
 int fps = args.Length > 1 && int.TryParse(args[1], out int parsedFps) ? parsedFps : defaultFps;
+long quality = args.Length > 2 && long.TryParse(args[2], out long parsedQuality)
+    ? Math.Clamp(parsedQuality, 25L, 90L)
+    : jpegQuality;
 int frameDelayMs = Math.Max(15, 1000 / Math.Max(1, fps));
 
-Console.WriteLine($"Host starting on port {port} at {fps} FPS");
+Console.WriteLine($"Host starting on port {port} at {fps} FPS, JPEG quality {quality}");
 
 TcpListener listener = new(IPAddress.Any, port);
 listener.Start();
@@ -23,6 +26,7 @@ while (true)
 {
     Console.WriteLine("Waiting for client...");
     using TcpClient client = await listener.AcceptTcpClientAsync();
+    client.NoDelay = true;
     using NetworkStream stream = client.GetStream();
     Console.WriteLine($"Client connected: {client.Client.RemoteEndPoint}");
 
@@ -31,7 +35,7 @@ while (true)
         while (client.Connected)
         {
             byte[] frame = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                ? CaptureWindowsFrame(jpegQuality)
+                ? CaptureWindowsFrame(quality)
                 : CaptureMacFramePlaceholder();
 
             await RemoteProtocol.WritePacketAsync(stream, PacketType.Frame, frame, CancellationToken.None);

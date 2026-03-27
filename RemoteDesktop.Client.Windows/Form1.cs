@@ -6,6 +6,7 @@ namespace RemoteDesktop.Client.Windows;
 public partial class Form1 : Form
 {
     private readonly CancellationTokenSource _cts = new();
+    private int _renderBusy;
 
     public Form1()
     {
@@ -35,6 +36,7 @@ public partial class Form1 : Form
     {
         using TcpClient client = new();
         await client.ConnectAsync(host, port, cancellationToken);
+        client.NoDelay = true;
 
         Invoke(() => statusLabel.Text = $"Connected to {host}:{port}");
         using NetworkStream stream = client.GetStream();
@@ -47,15 +49,28 @@ public partial class Form1 : Form
                 continue;
             }
 
-            using MemoryStream ms = new(payload);
-            using Image frame = Image.FromStream(ms);
-            Image cloned = (Image)frame.Clone();
-
-            Invoke(() =>
+            // If UI is still rendering previous frame, drop this one to keep latency low.
+            if (Interlocked.Exchange(ref _renderBusy, 1) == 1)
             {
-                Image? old = screenPictureBox.Image;
-                screenPictureBox.Image = cloned;
-                old?.Dispose();
+                continue;
+            }
+
+            BeginInvoke(() =>
+            {
+                try
+                {
+                    using MemoryStream ms = new(payload);
+                    using Image frame = Image.FromStream(ms);
+                    Image cloned = (Image)frame.Clone();
+
+                    Image? old = screenPictureBox.Image;
+                    screenPictureBox.Image = cloned;
+                    old?.Dispose();
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _renderBusy, 0);
+                }
             });
         }
     }

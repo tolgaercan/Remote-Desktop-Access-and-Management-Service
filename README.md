@@ -11,7 +11,7 @@ Bu repo, minimum bagimlilik ile C# kullanarak LAN uzerinden uzaktan masaustu aki
 ## Calistirma
 
 1. Host:
-   - `dotnet run --project .\RemoteDesktop.Host\RemoteDesktop.Host.csproj -- 5050 12`
+   - `dotnet run --project .\RemoteDesktop.Host\RemoteDesktop.Host.csproj -- 5050 12 55`
 2. Client:
    - `dotnet run --project .\RemoteDesktop.Client.Windows\RemoteDesktop.Client.Windows.csproj`
    - Host IP ve port gir, `Connect` tikla
@@ -19,6 +19,11 @@ Bu repo, minimum bagimlilik ile C# kullanarak LAN uzerinden uzaktan masaustu aki
 Argumanlar:
 - `port` varsayilan: `5050`
 - `fps` varsayilan: `12`
+- `jpegQuality` varsayilan: `55` (25-90 arasi)
+
+Gecikme azaltma oneri (ozellikle hotspot/LAN sunumu):
+- `dotnet run --project .\RemoteDesktop.Host\RemoteDesktop.Host.csproj -- 5050 8 40`
+- Daha dusuk FPS + daha dusuk JPEG kalite = daha az gecikme
 
 ## Self-contained Publish (Tum bagimliliklar uygulama icinde)
 
