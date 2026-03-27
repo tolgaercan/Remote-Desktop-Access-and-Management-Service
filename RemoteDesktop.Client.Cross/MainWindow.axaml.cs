@@ -247,6 +247,13 @@ public partial class MainWindow : Window
 
     private static int? MapToWindowsVirtualKey(Key key)
     {
+        // macOS Command key should behave like Ctrl for Windows shortcut ergonomics.
+        string keyName = key.ToString();
+        if (keyName is "LWin" or "RWin" or "LeftMeta" or "RightMeta" or "MetaLeft" or "MetaRight")
+        {
+            return 0x11;
+        }
+
         if (key >= Key.A && key <= Key.Z)
         {
             return 'A' + (key - Key.A);
@@ -269,6 +276,7 @@ public partial class MainWindow : Window
             Key.Tab => 0x09,
             Key.Space => 0x20,
             Key.Escape => 0x1B,
+            Key.CapsLock => 0x14,
             Key.Left => 0x25,
             Key.Up => 0x26,
             Key.Right => 0x27,
