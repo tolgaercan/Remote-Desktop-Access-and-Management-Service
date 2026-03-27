@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Net.Sockets;
+using System.Text;
 
 namespace RemoteDesktop.Core;
 
@@ -137,11 +138,11 @@ public static class RemoteProtocol
 
     public static byte[] BuildTextInputPayload(string text)
     {
-        return System.Text.Encoding.UTF8.GetBytes(text);
+        return Encoding.UTF8.GetBytes(text);
     }
 
     public static string ParseTextInputPayload(byte[] payload)
     {
-        return System.Text.Encoding.UTF8.GetString(payload);
+        return Encoding.UTF8.GetString(payload);
     }
 }

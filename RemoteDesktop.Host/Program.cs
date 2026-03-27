@@ -77,10 +77,6 @@ static async Task ReceiveInputLoopAsync(NetworkStream stream, CancellationToken 
     while (!cancellationToken.IsCancellationRequested)
     {
         (PacketType packetType, byte[] payload) = await RemoteProtocol.ReadPacketAsync(stream, cancellationToken);
-        if (packetType != PacketType.Frame)
-        {
-            Console.WriteLine($"Input packet received: {packetType}");
-        }
         HandleInputPacket(packetType, payload);
     }
 }

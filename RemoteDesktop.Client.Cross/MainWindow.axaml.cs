@@ -21,8 +21,7 @@ public partial class MainWindow : Window
     private Size _remoteFrameSize = default;
     private long _lastMouseMoveAt;
     private int _renderBusy;
-    /// <summary>TickCount64 when we sent '#' from Option+Digit3 to avoid duplicate TextInput.</summary>
-    private long _lastHashSentFromOptionDigit3Ticks;
+    private long _lastHashSentTicks;
 
     public MainWindow()
     {
@@ -121,7 +120,6 @@ public partial class MainWindow : Window
         }
         catch
         {
-            // Ignore transient disconnect during UI event burst.
         }
         finally
         {
@@ -176,21 +174,8 @@ public partial class MainWindow : Window
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
-        // Avalonia: layout-aware character (e.g. Turkish Mac Option+3 -> "#") even when Key/Alt matching fails.
-        if (e.KeySymbol == "#")
+        if (TrySendMacLayoutHash(e))
         {
-            _ = SendPacketAsync(PacketType.TextInput, RemoteProtocol.BuildTextInputPayload("#"));
-            _lastHashSentFromOptionDigit3Ticks = Environment.TickCount64;
-            e.Handled = true;
-            return;
-        }
-
-        // macOS: Option+3 -> '#'. PhysicalKey + Alt fallback.
-        if (IsOptionWithDigit3ForHash(e))
-        {
-            _ = SendPacketAsync(PacketType.TextInput, RemoteProtocol.BuildTextInputPayload("#"));
-            _lastHashSentFromOptionDigit3Ticks = Environment.TickCount64;
-            e.Handled = true;
             return;
         }
 
@@ -249,13 +234,25 @@ public partial class MainWindow : Window
             return;
         }
 
-        // KeyDown already sent '#' for Option+Digit3; TextInput may still fire on macOS.
-        if (e.Text == "#" && Environment.TickCount64 - _lastHashSentFromOptionDigit3Ticks < 120)
+        if (e.Text == "#" && Environment.TickCount64 - _lastHashSentTicks < 120)
         {
             return;
         }
 
         _ = SendPacketAsync(PacketType.TextInput, RemoteProtocol.BuildTextInputPayload(e.Text));
+    }
+
+    private bool TrySendMacLayoutHash(KeyEventArgs e)
+    {
+        if (e.KeySymbol != "#" && !IsOptionWithDigit3ForHash(e))
+        {
+            return false;
+        }
+
+        _ = SendPacketAsync(PacketType.TextInput, RemoteProtocol.BuildTextInputPayload("#"));
+        _lastHashSentTicks = Environment.TickCount64;
+        e.Handled = true;
+        return true;
     }
 
     private static bool IsOptionWithDigit3ForHash(KeyEventArgs e)
@@ -340,7 +337,6 @@ public partial class MainWindow : Window
 
     private static int? MapToWindowsVirtualKey(Key key)
     {
-        // macOS Command/Windows key should behave like Ctrl for shortcut ergonomics.
         string keyName = key.ToString();
         if (keyName.Contains("Meta", StringComparison.OrdinalIgnoreCase) ||
             keyName.Contains("Win", StringComparison.OrdinalIgnoreCase) ||
@@ -417,8 +413,6 @@ public partial class MainWindow : Window
 
     private static bool ShouldSendAsTextInput(KeyEventArgs e)
     {
-        // Ctrl/Meta combos should remain shortcut keys.
-        // Alt/Option combos can still produce characters on macOS layouts.
         if ((e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
         {
             return false;

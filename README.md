@@ -1,61 +1,105 @@
-# Remote Desktop Access and Management Service (LAN)
+# Remote Desktop (LAN)
 
-Bu repo, minimum bagimlilik ile C# kullanarak LAN uzerinden uzaktan masaustu akisinin temelini kurar.
+C# ile ayni ag uzerinden ekran paylasimi ve uzaktan giris.
 
-## Proje Yapisı
+| Proje | Rol |
+|--------|-----|
+| `RemoteDesktop.Core` | TCP paket protokolu |
+| `RemoteDesktop.Host` | Ekran + giris (Windows’ta tam destek) |
+| `RemoteDesktop.Client.Cross` | Istemci (Avalonia, Windows / macOS) |
 
-- `RemoteDesktop.Core`: Basit paket protokolu (frame gonder/al)
-- `RemoteDesktop.Host`: Ekrani yakalayan ve TCP ile gonderen host
-- `RemoteDesktop.Client.Cross`: Cross-platform Avalonia client (Windows/macOS, goruntu + mouse/klavye)
+## Kurulum
 
-## Calistirma
+1. [.NET SDK](https://dotnet.microsoft.com/download) yukle (10.x uyumlu).
+2. Repoyu ac ve bagimliliklari indir:
 
-1. Host:
-   - `dotnet run --project .\RemoteDesktop.Host\RemoteDesktop.Host.csproj -- 5050 12 55`
-2. Client:
-   - `dotnet run --project .\RemoteDesktop.Client.Cross\RemoteDesktop.Client.Cross.csproj`
-   - Host IP ve port gir, `Connect` tikla
+```powershell
+cd C:\Yol\Remote-Desktop-Access-and-Management-Service
+dotnet restore RemoteDesktopLan.slnx
+dotnet build RemoteDesktopLan.slnx
+```
 
-Argumanlar:
-- `port` varsayilan: `5050`
-- `fps` varsayilan: `12`
-- `jpegQuality` varsayilan: `55` (25-90 arasi)
+*(Host calisiyorsa `dotnet build` DLL kilidi verebilir; host’u kapatip tekrar dene.)*
 
-Gecikme azaltma oneri (ozellikle hotspot/LAN sunumu):
-- `dotnet run --project .\RemoteDesktop.Host\RemoteDesktop.Host.csproj -- 5050 8 40`
-- Daha dusuk FPS + daha dusuk JPEG kalite = daha az gecikme
+## Hizli calistirma (komut satiri)
 
-## Input Kontrolu (Mouse + Klavye)
+Proje kokunde (`Remote-Desktop-Access-and-Management-Service`).
 
-- Client penceresinde once `Connect` yap.
-- Goruntu alani uzerinde:
-  - Mouse hareketi ve tiklari host'a gider.
-  - Uygulama odaklandiginda klavye tuslari host'a gider.
-- Bu adimda input enjeksiyonu Windows host icin aktiftir.
+### Windows — Host (uzak PC)
 
-## Self-contained Publish (Tum bagimliliklar uygulama icinde)
+PowerShell veya CMD:
 
-Windows host + cross client:
+```powershell
+dotnet run --project .\RemoteDesktop.Host\RemoteDesktop.Host.csproj -- 5050 8 40
+```
 
-- Host:
-  - `dotnet publish .\RemoteDesktop.Host\RemoteDesktop.Host.csproj -c Release -r win-x64`
-- Cross Client (Windows):
-  - `dotnet publish .\RemoteDesktop.Client.Cross\RemoteDesktop.Client.Cross.csproj -c Release -r win-x64`
-- Cross Client (macOS Apple Silicon):
-  - `dotnet publish .\RemoteDesktop.Client.Cross\RemoteDesktop.Client.Cross.csproj -c Release -r osx-arm64`
-- Cross Client (macOS Intel):
-  - `dotnet publish .\RemoteDesktop.Client.Cross\RemoteDesktop.Client.Cross.csproj -c Release -r osx-x64`
+### Windows — Client
 
-Bu publish ciktilari .NET kurulumu olmadan da calisabilir.
+```powershell
+dotnet run --project .\RemoteDesktop.Client.Cross\RemoteDesktop.Client.Cross.csproj
+```
 
-## macOS Notu
+### macOS / Linux — Client
 
-Host uygulamasi macOS uzerinde de calisir. macOS tarafinda ekran yakalama icin sistemin `screencapture` araci kullanilir.
+Terminal:
 
-Ilk calistirmada macOS izinleri gerekir:
-- Screen Recording izni
-- Gerekirse Terminal/uygulama icin Accessibility izni (input adiminda)
+```bash
+cd /path/to/Remote-Desktop-Access-and-Management-Service
+dotnet run --project ./RemoteDesktop.Client.Cross/RemoteDesktop.Client.Cross.csproj
+```
 
-Basit senaryo:
-- Host: Windows
-- Client: macOS (`RemoteDesktop.Client.Cross`)
+### Cift tikla (Windows)
+
+- `run-host.bat` — host’u varsayilan ayarlarla baslatir (`5050 8 40`).
+- `run-client.bat` — client’i baslatir.
+
+### macOS — script
+
+```bash
+chmod +x run-client.sh
+./run-client.sh
+```
+
+## Baglanti
+
+1. Host’ta `ipconfig` ile **IPv4** adresini al.
+2. Client’ta bu IP + port **5050** yaz, **Connect**.
+
+## Argumanlar (Host)
+
+```text
+dotnet run --project .\RemoteDesktop.Host\RemoteDesktop.Host.csproj -- <port> <fps> <jpegKalite>
+```
+
+Ornek: `5050 8 40` — dusuk gecikme icin iyi baslangic.
+
+## Publish (kurulum gerektirmeyen exe / app)
+
+**Windows (host + client):**
+
+```powershell
+dotnet publish .\RemoteDesktop.Host\RemoteDesktop.Host.csproj -c Release -r win-x64
+dotnet publish .\RemoteDesktop.Client.Cross\RemoteDesktop.Client.Cross.csproj -c Release -r win-x64
+```
+
+Cikti ornekleri:
+
+- Host: `RemoteDesktop.Host\bin\Release\net10.0\win-x64\publish\RemoteDesktop.Host.exe`
+- Client: `RemoteDesktop.Client.Cross\bin\Release\net10.0\win-x64\publish\RemoteDesktop.Client.Cross.exe`
+
+**macOS (Apple Silicon):**
+
+```bash
+dotnet publish ./RemoteDesktop.Client.Cross/RemoteDesktop.Client.Cross.csproj -c Release -r osx-arm64
+```
+
+**macOS (Intel):**
+
+```bash
+dotnet publish ./RemoteDesktop.Client.Cross/RemoteDesktop.Client.Cross.csproj -c Release -r osx-x64
+```
+
+## Notlar
+
+- Uzaktan klavye/fare enjeksiyonu simdilik **Windows host** ile hedeflenir.
+- macOS’ta host kullanilirsa ekran icin `screencapture` ve sistem izinleri gerekebilir.
