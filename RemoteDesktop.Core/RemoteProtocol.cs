@@ -5,7 +5,19 @@ namespace RemoteDesktop.Core;
 
 public enum PacketType : byte
 {
-    Frame = 1
+    Frame = 1,
+    MouseMove = 2,
+    MouseDown = 3,
+    MouseUp = 4,
+    KeyDown = 5,
+    KeyUp = 6
+}
+
+public enum RemoteMouseButton : byte
+{
+    Left = 1,
+    Right = 2,
+    Middle = 3
 }
 
 public static class RemoteProtocol
@@ -50,5 +62,57 @@ public static class RemoteProtocol
 
             totalRead += read;
         }
+    }
+
+    public static byte[] BuildMouseMovePayload(int x, int y)
+    {
+        byte[] payload = new byte[8];
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), x);
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), y);
+        return payload;
+    }
+
+    public static (int X, int Y) ParseMouseMovePayload(byte[] payload)
+    {
+        if (payload.Length != 8)
+        {
+            throw new InvalidOperationException($"MouseMove payload must be 8 bytes, got {payload.Length}.");
+        }
+
+        int x = BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(0, 4));
+        int y = BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(4, 4));
+        return (x, y);
+    }
+
+    public static byte[] BuildMouseButtonPayload(RemoteMouseButton button)
+    {
+        return [(byte)button];
+    }
+
+    public static RemoteMouseButton ParseMouseButtonPayload(byte[] payload)
+    {
+        if (payload.Length != 1)
+        {
+            throw new InvalidOperationException($"Mouse button payload must be 1 byte, got {payload.Length}.");
+        }
+
+        return (RemoteMouseButton)payload[0];
+    }
+
+    public static byte[] BuildKeyPayload(int virtualKey)
+    {
+        byte[] payload = new byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), virtualKey);
+        return payload;
+    }
+
+    public static int ParseKeyPayload(byte[] payload)
+    {
+        if (payload.Length != 4)
+        {
+            throw new InvalidOperationException($"Key payload must be 4 bytes, got {payload.Length}.");
+        }
+
+        return BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(0, 4));
     }
 }

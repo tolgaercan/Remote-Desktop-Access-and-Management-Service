@@ -45,6 +45,9 @@ partial class Form1
         MinimumSize = new Size(900, 600);
         Name = "Form1";
         Text = "Remote Desktop Client (LAN)";
+        KeyPreview = true;
+        KeyDown += Form1_KeyDown;
+        KeyUp += Form1_KeyUp;
         hostTextBox.Location = new Point(12, 12);
         hostTextBox.Name = "hostTextBox";
         hostTextBox.PlaceholderText = "Host IP (example: 192.168.1.10)";
@@ -77,6 +80,9 @@ partial class Form1
         screenPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
         screenPictureBox.TabIndex = 4;
         screenPictureBox.TabStop = false;
+        screenPictureBox.MouseMove += screenPictureBox_MouseMove;
+        screenPictureBox.MouseDown += screenPictureBox_MouseDown;
+        screenPictureBox.MouseUp += screenPictureBox_MouseUp;
         ((System.ComponentModel.ISupportInitialize)screenPictureBox).EndInit();
         ResumeLayout(false);
         PerformLayout();

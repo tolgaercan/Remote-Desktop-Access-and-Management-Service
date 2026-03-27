@@ -6,7 +6,7 @@ Bu repo, minimum bagimlilik ile C# kullanarak LAN uzerinden uzaktan masaustu aki
 
 - `RemoteDesktop.Core`: Basit paket protokolu (frame gonder/al)
 - `RemoteDesktop.Host`: Ekrani yakalayan ve TCP ile gonderen host
-- `RemoteDesktop.Client.Windows`: Windows WinForms client (goruntu alir)
+- `RemoteDesktop.Client.Windows`: Windows WinForms client (goruntu alir, mouse/klavye yollar)
 
 ## Calistirma
 
@@ -24,6 +24,14 @@ Argumanlar:
 Gecikme azaltma oneri (ozellikle hotspot/LAN sunumu):
 - `dotnet run --project .\RemoteDesktop.Host\RemoteDesktop.Host.csproj -- 5050 8 40`
 - Daha dusuk FPS + daha dusuk JPEG kalite = daha az gecikme
+
+## Input Kontrolu (Mouse + Klavye)
+
+- Client penceresinde once `Connect` yap.
+- Goruntu alani (`screenPictureBox`) uzerinde:
+  - Mouse hareketi ve tiklari host'a gider.
+  - Form odaklandiginda klavye tuslari host'a gider.
+- Bu adimda input enjeksiyonu Windows host icin aktiftir.
 
 ## Self-contained Publish (Tum bagimliliklar uygulama icinde)
 
