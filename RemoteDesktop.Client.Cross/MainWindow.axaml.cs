@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         KeyDown += MainWindow_KeyDown;
         KeyUp += MainWindow_KeyUp;
+        TextInput += MainWindow_TextInput;
     }
 
     private async void ConnectButton_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -173,6 +174,11 @@ public partial class MainWindow : Window
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (ShouldSendAsTextInput(e))
+        {
+            return;
+        }
+
         int? vk = MapToWindowsVirtualKey(e.Key);
         if (vk is null)
         {
@@ -192,6 +198,11 @@ public partial class MainWindow : Window
 
     private void MainWindow_KeyUp(object? sender, KeyEventArgs e)
     {
+        if (ShouldSendAsTextInput(e))
+        {
+            return;
+        }
+
         int? vk = MapToWindowsVirtualKey(e.Key);
         if (vk is null)
         {
@@ -204,6 +215,16 @@ public partial class MainWindow : Window
         }
 
         _ = SendPacketAsync(PacketType.KeyUp, RemoteProtocol.BuildKeyPayload(vk.Value));
+    }
+
+    private void MainWindow_TextInput(object? sender, TextInputEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.Text))
+        {
+            return;
+        }
+
+        _ = SendPacketAsync(PacketType.TextInput, RemoteProtocol.BuildTextInputPayload(e.Text));
     }
 
     private void ScreenImage_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
@@ -353,6 +374,19 @@ public partial class MainWindow : Window
             Key.F12 => 0x7B,
             _ => null
         };
+    }
+
+    private static bool ShouldSendAsTextInput(KeyEventArgs e)
+    {
+        if ((e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) != 0)
+        {
+            return false;
+        }
+
+        return (e.Key >= Key.A && e.Key <= Key.Z) ||
+               (e.Key >= Key.D0 && e.Key <= Key.D9) ||
+               (e.Key >= Key.NumPad0 && e.Key <= Key.NumPad9) ||
+               e.Key.ToString().StartsWith("Oem", StringComparison.OrdinalIgnoreCase);
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)

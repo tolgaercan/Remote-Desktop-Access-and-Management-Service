@@ -20,6 +20,7 @@ const uint MOUSEEVENTF_WHEEL = 0x0800;
 const uint MOUSEEVENTF_MOVE = 0x0001;
 const uint MOUSEEVENTF_ABSOLUTE = 0x8000;
 const uint KEYEVENTF_KEYUP = 0x0002;
+const uint KEYEVENTF_UNICODE = 0x0004;
 const int INPUT_MOUSE = 0;
 const int INPUT_KEYBOARD = 1;
 
@@ -129,6 +130,12 @@ static void HandleInputPacket(PacketType packetType, byte[] payload)
             SendMouseWheel(delta);
             break;
         }
+        case PacketType.TextInput:
+        {
+            string text = RemoteProtocol.ParseTextInputPayload(payload);
+            SendUnicodeText(text);
+            break;
+        }
         default:
             break;
     }
@@ -228,6 +235,41 @@ static void SendMouseWheel(int delta)
     };
 
     SendInput(1, [input], Marshal.SizeOf<INPUT>());
+}
+
+static void SendUnicodeText(string text)
+{
+    foreach (char ch in text)
+    {
+        INPUT down = new()
+        {
+            type = INPUT_KEYBOARD,
+            U = new InputUnion
+            {
+                ki = new KEYBDINPUT
+                {
+                    wScan = ch,
+                    dwFlags = KEYEVENTF_UNICODE
+                }
+            }
+        };
+
+        INPUT up = new()
+        {
+            type = INPUT_KEYBOARD,
+            U = new InputUnion
+            {
+                ki = new KEYBDINPUT
+                {
+                    wScan = ch,
+                    dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
+                }
+            }
+        };
+
+        SendInput(1, [down], Marshal.SizeOf<INPUT>());
+        SendInput(1, [up], Marshal.SizeOf<INPUT>());
+    }
 }
 
 static byte[] CaptureWindowsFrame(long quality)

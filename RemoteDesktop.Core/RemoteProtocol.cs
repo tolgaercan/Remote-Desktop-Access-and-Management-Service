@@ -11,7 +11,8 @@ public enum PacketType : byte
     MouseUp = 4,
     KeyDown = 5,
     KeyUp = 6,
-    MouseWheel = 7
+    MouseWheel = 7,
+    TextInput = 8
 }
 
 public enum RemoteMouseButton : byte
@@ -132,5 +133,15 @@ public static class RemoteProtocol
         }
 
         return BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(0, 4));
+    }
+
+    public static byte[] BuildTextInputPayload(string text)
+    {
+        return System.Text.Encoding.UTF8.GetBytes(text);
+    }
+
+    public static string ParseTextInputPayload(byte[] payload)
+    {
+        return System.Text.Encoding.UTF8.GetString(payload);
     }
 }
