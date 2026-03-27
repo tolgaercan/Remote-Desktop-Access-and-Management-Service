@@ -316,13 +316,6 @@ public partial class MainWindow : Window
             return 0x11;
         }
 
-        // macOS Option should behave like Alt on Windows.
-        if (keyName.Contains("Option", StringComparison.OrdinalIgnoreCase) ||
-            keyName.Contains("Alt", StringComparison.OrdinalIgnoreCase))
-        {
-            return 0x12;
-        }
-
         if (key >= Key.A && key <= Key.Z)
         {
             return 'A' + (key - Key.A);
@@ -391,7 +384,9 @@ public partial class MainWindow : Window
 
     private static bool ShouldSendAsTextInput(KeyEventArgs e)
     {
-        if ((e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) != 0)
+        // Ctrl/Meta combos should remain shortcut keys.
+        // Alt/Option combos can still produce characters on macOS layouts.
+        if ((e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
         {
             return false;
         }
