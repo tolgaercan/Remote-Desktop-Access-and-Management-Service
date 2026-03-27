@@ -68,11 +68,12 @@ static byte[] CaptureWindowsFrame(long quality)
 
 static byte[] CaptureMacFramePlaceholder()
 {
+    string tempFile = Path.Combine(Path.GetTempPath(), $"rd-host-{Guid.NewGuid():N}.jpg");
     ProcessStartInfo psi = new()
     {
         FileName = "screencapture",
-        Arguments = "-x -t jpg -",
-        RedirectStandardOutput = true,
+        Arguments = $"-x -t jpg \"{tempFile}\"",
+        RedirectStandardOutput = false,
         RedirectStandardError = true,
         UseShellExecute = false,
         CreateNoWindow = true
@@ -80,9 +81,6 @@ static byte[] CaptureMacFramePlaceholder()
 
     using Process process = Process.Start(psi)
         ?? throw new InvalidOperationException("Failed to start macOS screencapture process.");
-
-    using MemoryStream ms = new();
-    process.StandardOutput.BaseStream.CopyTo(ms);
     process.WaitForExit();
 
     if (process.ExitCode != 0)
@@ -91,7 +89,21 @@ static byte[] CaptureMacFramePlaceholder()
         throw new InvalidOperationException($"screencapture failed with exit code {process.ExitCode}: {err}");
     }
 
-    byte[] jpegBytes = ms.ToArray();
+    if (!File.Exists(tempFile))
+    {
+        throw new InvalidOperationException("screencapture did not produce an output file.");
+    }
+
+    byte[] jpegBytes = File.ReadAllBytes(tempFile);
+    try
+    {
+        File.Delete(tempFile);
+    }
+    catch
+    {
+        // Best-effort cleanup only; capture should still continue.
+    }
+
     if (jpegBytes.Length == 0)
     {
         throw new InvalidOperationException("screencapture returned empty frame.");
