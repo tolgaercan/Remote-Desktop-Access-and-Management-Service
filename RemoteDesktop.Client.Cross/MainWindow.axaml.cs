@@ -68,6 +68,7 @@ public partial class MainWindow : Window
         _client.NoDelay = true;
         _stream = _client.GetStream();
         StatusTextBlock.Text = $"Connected to {host}:{port}";
+        ScreenImage.Focus();
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -149,6 +150,7 @@ public partial class MainWindow : Window
 
     private void ScreenImage_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        ScreenImage.Focus();
         RemoteMouseButton? btn = ToRemoteButton(e.GetCurrentPoint(ScreenImage).Properties.PointerUpdateKind);
         if (btn is null)
         {
@@ -271,11 +273,20 @@ public partial class MainWindow : Window
 
     private static int? MapToWindowsVirtualKey(Key key)
     {
-        // macOS Command key should behave like Ctrl for Windows shortcut ergonomics.
+        // macOS Command/Windows key should behave like Ctrl for shortcut ergonomics.
         string keyName = key.ToString();
-        if (keyName is "LWin" or "RWin" or "LeftMeta" or "RightMeta" or "MetaLeft" or "MetaRight")
+        if (keyName.Contains("Meta", StringComparison.OrdinalIgnoreCase) ||
+            keyName.Contains("Win", StringComparison.OrdinalIgnoreCase) ||
+            keyName.Contains("Command", StringComparison.OrdinalIgnoreCase))
         {
             return 0x11;
+        }
+
+        // macOS Option should behave like Alt on Windows.
+        if (keyName.Contains("Option", StringComparison.OrdinalIgnoreCase) ||
+            keyName.Contains("Alt", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0x12;
         }
 
         if (key >= Key.A && key <= Key.Z)
@@ -295,17 +306,20 @@ public partial class MainWindow : Window
 
         return key switch
         {
+            // Turkish Q / OEM keys
+            Key.Oem1 => 0xBA,
+            Key.Oem2 => 0xBF,
+            Key.Oem3 => 0xC0,
+            Key.Oem4 => 0xDB,
+            Key.Oem5 => 0xDC,
+            Key.Oem6 => 0xDD,
+            Key.Oem7 => 0xDE,
+            Key.Oem8 => 0xDF,
+            Key.Oem102 => 0xE2,
             Key.OemComma => 0xBC,
             Key.OemPeriod => 0xBE,
             Key.OemMinus => 0xBD,
             Key.OemPlus => 0xBB,
-            Key.OemQuestion => 0xBF,
-            Key.OemSemicolon => 0xBA,
-            Key.OemQuotes => 0xDE,
-            Key.OemOpenBrackets => 0xDB,
-            Key.OemCloseBrackets => 0xDD,
-            Key.OemPipe => 0xDC,
-            Key.OemTilde => 0xC0,
             Key.Enter => 0x0D,
             Key.Back => 0x08,
             Key.Tab => 0x09,
@@ -320,6 +334,7 @@ public partial class MainWindow : Window
             Key.LeftCtrl or Key.RightCtrl => 0x11,
             Key.LeftAlt or Key.RightAlt => 0x12,
             Key.Delete => 0x2E,
+            Key.Insert => 0x2D,
             Key.Home => 0x24,
             Key.End => 0x23,
             Key.PageUp => 0x21,
