@@ -174,6 +174,14 @@ public partial class MainWindow : Window
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
+        // Turkish Mac layout: '#' is commonly Option+3.
+        // Send it as text directly to avoid modifier mapping conflicts.
+        if (e.Key == Key.D3 && (e.KeyModifiers & KeyModifiers.Alt) != 0)
+        {
+            _ = SendPacketAsync(PacketType.TextInput, RemoteProtocol.BuildTextInputPayload("#"));
+            return;
+        }
+
         if (ShouldSendAsTextInput(e))
         {
             return;
@@ -198,6 +206,11 @@ public partial class MainWindow : Window
 
     private void MainWindow_KeyUp(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.D3 && (e.KeyModifiers & KeyModifiers.Alt) != 0)
+        {
+            return;
+        }
+
         if (ShouldSendAsTextInput(e))
         {
             return;
