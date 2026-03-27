@@ -222,16 +222,13 @@ static void SendKeyboard(int virtualKey, bool keyUp)
 }
 
 /// <summary>
-/// Clears modifier state so KEYEVENTF_UNICODE is not combined with Alt/Ctrl/Shift (e.g. Mac Option+#).
+/// Releases only Alt (VK_MENU). Mac Option sends Alt before characters like '#'.
+/// Do not release Ctrl/Shift here — Cmd is mapped to Ctrl; releasing it breaks Cmd+C/V shortcuts.
 /// </summary>
 static void ReleaseModifiersBeforeUnicodeText()
 {
-    const int VK_SHIFT = 0x10;
-    const int VK_CONTROL = 0x11;
     const int VK_MENU = 0x12;
     SendKeyboard(VK_MENU, keyUp: true);
-    SendKeyboard(VK_CONTROL, keyUp: true);
-    SendKeyboard(VK_SHIFT, keyUp: true);
 }
 
 static void SendMouseWheel(int delta)
