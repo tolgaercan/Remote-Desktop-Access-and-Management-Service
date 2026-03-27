@@ -10,7 +10,8 @@ public enum PacketType : byte
     MouseDown = 3,
     MouseUp = 4,
     KeyDown = 5,
-    KeyUp = 6
+    KeyUp = 6,
+    MouseWheel = 7
 }
 
 public enum RemoteMouseButton : byte
@@ -111,6 +112,23 @@ public static class RemoteProtocol
         if (payload.Length != 4)
         {
             throw new InvalidOperationException($"Key payload must be 4 bytes, got {payload.Length}.");
+        }
+
+        return BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(0, 4));
+    }
+
+    public static byte[] BuildMouseWheelPayload(int delta)
+    {
+        byte[] payload = new byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), delta);
+        return payload;
+    }
+
+    public static int ParseMouseWheelPayload(byte[] payload)
+    {
+        if (payload.Length != 4)
+        {
+            throw new InvalidOperationException($"Mouse wheel payload must be 4 bytes, got {payload.Length}.");
         }
 
         return BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(0, 4));

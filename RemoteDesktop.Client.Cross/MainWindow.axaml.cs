@@ -177,6 +177,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Lock keys are more reliable when sent as immediate press+release.
+        if (vk.Value == 0x14)
+        {
+            _ = SendPacketAsync(PacketType.KeyDown, RemoteProtocol.BuildKeyPayload(vk.Value));
+            _ = SendPacketAsync(PacketType.KeyUp, RemoteProtocol.BuildKeyPayload(vk.Value));
+            return;
+        }
+
         _ = SendPacketAsync(PacketType.KeyDown, RemoteProtocol.BuildKeyPayload(vk.Value));
     }
 
@@ -188,7 +196,23 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (vk.Value == 0x14)
+        {
+            return;
+        }
+
         _ = SendPacketAsync(PacketType.KeyUp, RemoteProtocol.BuildKeyPayload(vk.Value));
+    }
+
+    private void ScreenImage_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        int delta = (int)Math.Round(e.Delta.Y * 120.0);
+        if (delta == 0)
+        {
+            return;
+        }
+
+        _ = SendPacketAsync(PacketType.MouseWheel, RemoteProtocol.BuildMouseWheelPayload(delta));
     }
 
     private bool TryMapToRemoteCoordinates(Point point, out int remoteX, out int remoteY)
@@ -271,6 +295,17 @@ public partial class MainWindow : Window
 
         return key switch
         {
+            Key.OemComma => 0xBC,
+            Key.OemPeriod => 0xBE,
+            Key.OemMinus => 0xBD,
+            Key.OemPlus => 0xBB,
+            Key.OemQuestion => 0xBF,
+            Key.OemSemicolon => 0xBA,
+            Key.OemQuotes => 0xDE,
+            Key.OemOpenBrackets => 0xDB,
+            Key.OemCloseBrackets => 0xDD,
+            Key.OemPipe => 0xDC,
+            Key.OemTilde => 0xC0,
             Key.Enter => 0x0D,
             Key.Back => 0x08,
             Key.Tab => 0x09,

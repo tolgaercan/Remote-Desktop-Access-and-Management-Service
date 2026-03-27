@@ -18,7 +18,8 @@
              Stretch="Uniform"
              PointerMoved="ScreenImage_PointerMoved"
              PointerPressed="ScreenImage_PointerPressed"
-             PointerReleased="ScreenImage_PointerReleased"/>
+             PointerReleased="ScreenImage_PointerReleased"
+             PointerWheelChanged="ScreenImage_PointerWheelChanged"/>
     </Border>
   </Grid>
 </Window>

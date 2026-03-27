@@ -16,6 +16,7 @@ const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
 const uint MOUSEEVENTF_RIGHTUP = 0x0010;
 const uint MOUSEEVENTF_MIDDLEDOWN = 0x0020;
 const uint MOUSEEVENTF_MIDDLEUP = 0x0040;
+const uint MOUSEEVENTF_WHEEL = 0x0800;
 const uint MOUSEEVENTF_MOVE = 0x0001;
 const uint MOUSEEVENTF_ABSOLUTE = 0x8000;
 const uint KEYEVENTF_KEYUP = 0x0002;
@@ -122,6 +123,12 @@ static void HandleInputPacket(PacketType packetType, byte[] payload)
             SendKeyboard(vk, keyUp: true);
             break;
         }
+        case PacketType.MouseWheel:
+        {
+            int delta = RemoteProtocol.ParseMouseWheelPayload(payload);
+            SendMouseWheel(delta);
+            break;
+        }
         default:
             break;
     }
@@ -198,6 +205,24 @@ static void SendKeyboard(int virtualKey, bool keyUp)
             {
                 wVk = (ushort)virtualKey,
                 dwFlags = keyUp ? KEYEVENTF_KEYUP : 0
+            }
+        }
+    };
+
+    SendInput(1, [input], Marshal.SizeOf<INPUT>());
+}
+
+static void SendMouseWheel(int delta)
+{
+    INPUT input = new()
+    {
+        type = INPUT_MOUSE,
+        U = new InputUnion
+        {
+            mi = new MOUSEINPUT
+            {
+                mouseData = (uint)delta,
+                dwFlags = MOUSEEVENTF_WHEEL
             }
         }
     };
