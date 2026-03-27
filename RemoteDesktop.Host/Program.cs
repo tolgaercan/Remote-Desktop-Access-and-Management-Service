@@ -16,7 +16,11 @@ const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
 const uint MOUSEEVENTF_RIGHTUP = 0x0010;
 const uint MOUSEEVENTF_MIDDLEDOWN = 0x0020;
 const uint MOUSEEVENTF_MIDDLEUP = 0x0040;
+const uint MOUSEEVENTF_MOVE = 0x0001;
+const uint MOUSEEVENTF_ABSOLUTE = 0x8000;
 const uint KEYEVENTF_KEYUP = 0x0002;
+const int INPUT_MOUSE = 0;
+const int INPUT_KEYBOARD = 1;
 
 int port = args.Length > 0 && int.TryParse(args[0], out int parsedPort) ? parsedPort : defaultPort;
 int fps = args.Length > 1 && int.TryParse(args[1], out int parsedFps) ? parsedFps : defaultFps;
@@ -71,6 +75,10 @@ static async Task ReceiveInputLoopAsync(NetworkStream stream, CancellationToken 
     while (!cancellationToken.IsCancellationRequested)
     {
         (PacketType packetType, byte[] payload) = await RemoteProtocol.ReadPacketAsync(stream, cancellationToken);
+        if (packetType != PacketType.Frame)
+        {
+            Console.WriteLine($"Input packet received: {packetType}");
+        }
         HandleInputPacket(packetType, payload);
     }
 }
@@ -87,7 +95,7 @@ static void HandleInputPacket(PacketType packetType, byte[] payload)
         case PacketType.MouseMove:
         {
             (int x, int y) = RemoteProtocol.ParseMouseMovePayload(payload);
-            SetCursorPos(x, y);
+            SendMouseMoveAbsolute(x, y);
             break;
         }
         case PacketType.MouseDown:
@@ -105,13 +113,13 @@ static void HandleInputPacket(PacketType packetType, byte[] payload)
         case PacketType.KeyDown:
         {
             int vk = RemoteProtocol.ParseKeyPayload(payload);
-            keybd_event((byte)vk, 0, 0, UIntPtr.Zero);
+            SendKeyboard(vk, keyUp: false);
             break;
         }
         case PacketType.KeyUp:
         {
             int vk = RemoteProtocol.ParseKeyPayload(payload);
-            keybd_event((byte)vk, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+            SendKeyboard(vk, keyUp: true);
             break;
         }
         default:
@@ -131,8 +139,70 @@ static void SendMouseButton(RemoteMouseButton button, bool down)
 
     if (flag != 0)
     {
-        mouse_event(flag, 0, 0, 0, UIntPtr.Zero);
+        INPUT input = new()
+        {
+            type = INPUT_MOUSE,
+            U = new InputUnion
+            {
+                mi = new MOUSEINPUT
+                {
+                    dwFlags = flag
+                }
+            }
+        };
+
+        SendInput(1, [input], Marshal.SizeOf<INPUT>());
     }
+}
+
+static void SendMouseMoveAbsolute(int x, int y)
+{
+    int width = GetSystemMetrics(0);
+    int height = GetSystemMetrics(1);
+    if (width <= 1 || height <= 1)
+    {
+        return;
+    }
+
+    int clampedX = Math.Clamp(x, 0, width - 1);
+    int clampedY = Math.Clamp(y, 0, height - 1);
+
+    int normalizedX = clampedX * 65535 / (width - 1);
+    int normalizedY = clampedY * 65535 / (height - 1);
+
+    INPUT input = new()
+    {
+        type = INPUT_MOUSE,
+        U = new InputUnion
+        {
+            mi = new MOUSEINPUT
+            {
+                dx = normalizedX,
+                dy = normalizedY,
+                dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE
+            }
+        }
+    };
+
+    SendInput(1, [input], Marshal.SizeOf<INPUT>());
+}
+
+static void SendKeyboard(int virtualKey, bool keyUp)
+{
+    INPUT input = new()
+    {
+        type = INPUT_KEYBOARD,
+        U = new InputUnion
+        {
+            ki = new KEYBDINPUT
+            {
+                wVk = (ushort)virtualKey,
+                dwFlags = keyUp ? KEYEVENTF_KEYUP : 0
+            }
+        }
+    };
+
+    SendInput(1, [input], Marshal.SizeOf<INPUT>());
 }
 
 static byte[] CaptureWindowsFrame(long quality)
@@ -207,10 +277,38 @@ static byte[] CaptureMacFramePlaceholder()
 static extern int GetSystemMetrics(int nIndex);
 
 [DllImport("user32.dll")]
-static extern bool SetCursorPos(int x, int y);
+static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
-[DllImport("user32.dll")]
-static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
+struct INPUT
+{
+    public int type;
+    public InputUnion U;
+}
 
-[DllImport("user32.dll")]
-static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+[StructLayout(LayoutKind.Explicit)]
+struct InputUnion
+{
+    [FieldOffset(0)]
+    public MOUSEINPUT mi;
+    [FieldOffset(0)]
+    public KEYBDINPUT ki;
+}
+
+struct MOUSEINPUT
+{
+    public int dx;
+    public int dy;
+    public uint mouseData;
+    public uint dwFlags;
+    public uint time;
+    public UIntPtr dwExtraInfo;
+}
+
+struct KEYBDINPUT
+{
+    public ushort wVk;
+    public ushort wScan;
+    public uint dwFlags;
+    public uint time;
+    public UIntPtr dwExtraInfo;
+}
