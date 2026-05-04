@@ -309,31 +309,43 @@ static bool IsGrayscaleArg(string? arg)
 
 /// <summary>
 /// Renkli ekrani luminance ile R=G=B olacak sekilde gri tonlamaya cevirir (JPEG oncesi).
+/// ColorMatrix + DrawImage bazi surumlerde BGR sirasi yuzunden sari sapma verebiliyor;
+/// bu yuzden Format24bppRgb (bellekte B, G, R) icin LockBits ile dogrudan piksel islenir.
 /// </summary>
 static Bitmap ConvertToGrayscale(Bitmap color)
 {
-    Bitmap gray = new(color.Width, color.Height, PixelFormat.Format24bppRgb);
-    ColorMatrix matrix = new(new[]
+    int w = color.Width;
+    int h = color.Height;
+    Bitmap gray = new(w, h, PixelFormat.Format24bppRgb);
+    Rectangle rect = new(0, 0, w, h);
+    BitmapData srcData = color.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+    BitmapData dstData = gray.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+    try
     {
-        new[] { 0.299f, 0.587f, 0.114f, 0f, 0f },
-        new[] { 0.299f, 0.587f, 0.114f, 0f, 0f },
-        new[] { 0.299f, 0.587f, 0.114f, 0f, 0f },
-        new[] { 0f, 0f, 0f, 1f, 0f },
-        new[] { 0f, 0f, 0f, 0f, 1f }
-    });
+        for (int row = 0; row < h; row++)
+        {
+            int srcRow = row * srcData.Stride;
+            int dstRow = row * dstData.Stride;
+            for (int col = 0; col < w; col++)
+            {
+                int p = col * 3;
+                byte b = Marshal.ReadByte(IntPtr.Add(srcData.Scan0, srcRow + p));
+                byte gch = Marshal.ReadByte(IntPtr.Add(srcData.Scan0, srcRow + p + 1));
+                byte r = Marshal.ReadByte(IntPtr.Add(srcData.Scan0, srcRow + p + 2));
+                int lum = (int)Math.Round(0.299 * r + 0.587 * gch + 0.114 * b);
+                lum = Math.Clamp(lum, 0, 255);
+                Marshal.WriteByte(IntPtr.Add(dstData.Scan0, dstRow + p), (byte)lum);
+                Marshal.WriteByte(IntPtr.Add(dstData.Scan0, dstRow + p + 1), (byte)lum);
+                Marshal.WriteByte(IntPtr.Add(dstData.Scan0, dstRow + p + 2), (byte)lum);
+            }
+        }
+    }
+    finally
+    {
+        color.UnlockBits(srcData);
+        gray.UnlockBits(dstData);
+    }
 
-    using Graphics g = Graphics.FromImage(gray);
-    using ImageAttributes ia = new();
-    ia.SetColorMatrix(matrix);
-    g.DrawImage(
-        color,
-        new Rectangle(0, 0, color.Width, color.Height),
-        0,
-        0,
-        color.Width,
-        color.Height,
-        GraphicsUnit.Pixel,
-        ia);
     return gray;
 }
 

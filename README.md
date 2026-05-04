@@ -69,10 +69,9 @@ Varsayilan renkli ornek: `5050 8 30`.
 **Akis (her kare):**
 
 1. Ekran **24 bpp RGB** bitmap olarak yakalanir (`CopyFromScreen`) — henuz renkli.
-2. Gri mod aciksa, bu bitmap **JPEG’e yazilmadan once** `Graphics.DrawImage` + **`ColorMatrix`** ile islenir.
-3. Matris, her piksel icin standart **luminance** (parlaklik) agirliklariyla tek bir gri deger uretir ve **R, G, B kanallarina ayni degeri** yazar:  
-   **Y ≈ 0,299·R + 0,587·G + 0,114·B** (ITU-R BT.601 benzeri yaklasim). Sonuc: goruntu **renksiz** (R = G = B), yani gri tonlama.
-4. Sonra her zamanki gibi **JPEG** sikistirilir ve TCP ile `Frame` paketi olarak gonderilir.
+2. Gri mod aciksa, bu bitmap **JPEG’e yazilmadan once** `LockBits` ile piksel piksel islenir. `Format24bppRgb` bellekte **BGR** sirasidir (once Mavi, Yesil, Kirmizi bayt); her pikselde **Y ≈ 0,299·R + 0,587·G + 0,114·B** hesaplanir ve **uc bayta da ayni Y** yazilir (gri).  
+   *(Eski `ColorMatrix` + `DrawImage` yolu bazi surumlerde kanal sirasi yuzunden sari sapma verebiliyordu; dogrudan BGR okuma bunu giderir.)*
+3. Sonra her zamanki gibi **JPEG** sikistirilir ve TCP ile `Frame` paketi olarak gonderilir.
 
 **Neden:** Renk bilgisi (uc kanal arasindaki fark) kalktigi icin cogu sahnede **JPEG dosyasi bir miktar kuculebilir**; dar bant (hotspot, kalabalik Wi-Fi) icin **deneysel** bir secenek. Kazanc **icerige baglidir**; garanti sabit yuzde yok.
 
