@@ -80,6 +80,8 @@ public partial class MainWindow : Window
                 continue;
             }
 
+            payload = await DrainQueuedFramesToLatestAsync(payload, cancellationToken);
+
             if (Interlocked.Exchange(ref _renderBusy, 1) == 1)
             {
                 continue;
@@ -101,6 +103,49 @@ public partial class MainWindow : Window
                 }
             });
         }
+    }
+
+    /// <summary>
+    /// TCP buffers can hold many JPEG frames on slow links; reading only one per loop shows stale video.
+    /// While more data is already waiting, read ahead and keep only the latest Frame payload.
+    /// </summary>
+    private async Task<byte[]> DrainQueuedFramesToLatestAsync(byte[] latestPayload, CancellationToken cancellationToken)
+    {
+        Socket? socket = _client?.Client;
+        NetworkStream? stream = _stream;
+        if (socket is null || stream is null)
+        {
+            return latestPayload;
+        }
+
+        const int maxDrainPackets = 64;
+        for (int i = 0; i < maxDrainPackets; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            bool more;
+            try
+            {
+                more = socket.Poll(0, SelectMode.SelectRead);
+            }
+            catch (ObjectDisposedException)
+            {
+                break;
+            }
+
+            if (!more || socket.Available == 0)
+            {
+                break;
+            }
+
+            (PacketType packetType, byte[] payload) = await RemoteProtocol.ReadPacketAsync(stream, cancellationToken);
+            if (packetType == PacketType.Frame)
+            {
+                latestPayload = payload;
+            }
+        }
+
+        return latestPayload;
     }
 
     private async Task SendPacketAsync(PacketType packetType, byte[] payload)
