@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Diagnostics;
 using System.Net;
@@ -43,6 +44,10 @@ while (true)
     client.NoDelay = true;
     using NetworkStream stream = client.GetStream();
     Console.WriteLine($"Client connected: {client.Client.RemoteEndPoint}");
+    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+    {
+        Console.WriteLine("JPEG kalite satiri (PSNR/MSE) asagida tek satirda guncellenir.");
+    }
 
     try
     {
@@ -55,6 +60,7 @@ while (true)
     }
     catch (Exception ex)
     {
+        Console.WriteLine();
         Console.WriteLine($"Client disconnected: {ex.Message}");
     }
 }
@@ -63,9 +69,15 @@ static async Task SendFramesLoopAsync(NetworkStream stream, int frameDelayMs, lo
 {
     while (!cancellationToken.IsCancellationRequested)
     {
-        byte[] frame = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? CaptureWindowsFrame(quality)
-            : CaptureMacFramePlaceholder();
+        byte[] frame;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            (frame, _, _, _, _) = CaptureWindowsFrameWithMetrics(quality, printStatusLine: true);
+        }
+        else
+        {
+            frame = CaptureMacFramePlaceholder();
+        }
 
         await RemoteProtocol.WritePacketAsync(stream, PacketType.Frame, frame, cancellationToken);
         await Task.Delay(frameDelayMs, cancellationToken);
@@ -282,7 +294,10 @@ static void SendUnicodeText(string text)
     }
 }
 
-static byte[] CaptureWindowsFrame(long quality)
+/// <summary>
+/// Ham ekrani JPEG'e cevirir; decode sonrasi piksellerle MSE/PSNR hesaplar (kayip olcum).
+/// </summary>
+static (byte[] JpegBytes, double PsnrDb, double Mse, int JpegLength, int RawRgbLength) CaptureWindowsFrameWithMetrics(long quality, bool printStatusLine)
 {
     int width = GetSystemMetrics(0);
     int height = GetSystemMetrics(1);
@@ -301,7 +316,100 @@ static byte[] CaptureWindowsFrame(long quality)
     EncoderParameters encoderParameters = new(1);
     encoderParameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
     bitmap.Save(ms, jpegCodec, encoderParameters);
-    return ms.ToArray();
+    byte[] jpegBytes = ms.ToArray();
+
+    int rawRgb = width * height * 3;
+    double psnrDb;
+    double mse;
+    using (Bitmap decodedRgb = DecodeJpegToRgb24(jpegBytes, width, height))
+    {
+        (mse, psnrDb) = ComputeMsePsnrRgb24(bitmap, decodedRgb);
+    }
+
+    if (printStatusLine)
+    {
+        double compressionRatio = jpegBytes.Length > 0 ? rawRgb / (double)jpegBytes.Length : 0.0;
+        double qualityRatio = quality / 100.0;
+        double aggressiveIndicator = (100.0 - quality) / 100.0;
+        Console.Write(
+            $"\rJPEG Q={quality} ({qualityRatio:P0} olcek) | PSNR={psnrDb:F2} dB | MSE={mse:F2} | " +
+            $"JPEG {jpegBytes.Length / 1024.0:F1} KB / ham {rawRgb / 1024.0:F1} KB | sikistirma ~{compressionRatio:F1}x | " +
+            $"agresiflik gostergesi {aggressiveIndicator:P0}   ");
+    }
+
+    return (jpegBytes, psnrDb, mse, jpegBytes.Length, rawRgb);
+}
+
+static Bitmap DecodeJpegToRgb24(byte[] jpegBytes, int width, int height)
+{
+    using MemoryStream readMs = new(jpegBytes);
+    using Bitmap loaded = new(readMs);
+    if (loaded.PixelFormat == PixelFormat.Format24bppRgb && loaded.Width == width && loaded.Height == height)
+    {
+        return (Bitmap)loaded.Clone();
+    }
+
+    Bitmap rgb = new(width, height, PixelFormat.Format24bppRgb);
+    using (Graphics gr = Graphics.FromImage(rgb))
+    {
+        gr.InterpolationMode = InterpolationMode.NearestNeighbor;
+        gr.PixelOffsetMode = PixelOffsetMode.Half;
+        gr.CompositingMode = CompositingMode.SourceCopy;
+        gr.DrawImage(loaded, 0, 0, width, height);
+    }
+
+    return rgb;
+}
+
+static (double Mse, double PsnrDb) ComputeMsePsnrRgb24(Bitmap a, Bitmap b)
+{
+    if (a.Width != b.Width || a.Height != b.Height)
+    {
+        throw new InvalidOperationException("Bitmap sizes must match for PSNR.");
+    }
+
+    int w = a.Width;
+    int h = a.Height;
+    Rectangle rect = new(0, 0, w, h);
+    BitmapData da = a.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+    BitmapData db = b.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+    try
+    {
+        long sumSq = 0;
+        long count = 0;
+        for (int y = 0; y < h; y++)
+        {
+            int oa = y * da.Stride;
+            int ob = y * db.Stride;
+            for (int x = 0; x < w; x++)
+            {
+                int pa = oa + (x * 3);
+                int pb = ob + (x * 3);
+                for (int c = 0; c < 3; c++)
+                {
+                    int va = Marshal.ReadByte(IntPtr.Add(da.Scan0, pa + c));
+                    int vb = Marshal.ReadByte(IntPtr.Add(db.Scan0, pb + c));
+                    int d = va - vb;
+                    sumSq += (long)d * d;
+                    count++;
+                }
+            }
+        }
+
+        double mse = sumSq / (double)count;
+        if (mse < 1e-12)
+        {
+            return (mse, 99.99);
+        }
+
+        double psnr = 10.0 * Math.Log10((255.0 * 255.0) / mse);
+        return (mse, psnr);
+    }
+    finally
+    {
+        a.UnlockBits(da);
+        b.UnlockBits(db);
+    }
 }
 
 static byte[] CaptureMacFramePlaceholder()
