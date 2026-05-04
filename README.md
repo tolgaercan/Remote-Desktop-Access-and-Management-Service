@@ -45,7 +45,44 @@ dotnet run --project ./RemoteDesktop.Client.Cross/RemoteDesktop.Client.Cross.csp
 1. Windows’ta `ipconfig` ile **IPv4** adresini al.
 2. Mac client’ta bu IP + port **5050** yaz, **Connect**.
 
-Host argumanlari: `<port> <fps> <jpegKalite>` — varsayilan ornek: `5050 8 30`.
+Host argumanlari:
+
+```text
+<port> <fps> <jpegKalite> [gray|gri|1]
+```
+
+| Arguman | Ornek | Aciklama |
+|---------|--------|----------|
+| port | `5050` | TCP dinleme portu |
+| fps | `8` | Saniyede yaklasik kare sayisi (ic hesap: min ~15 ms kare araligi) |
+| jpegKalite | `30` | JPEG encoder kalitesi **25–90** arasi (dusuk = daha kucuk dosya, daha cok artefakt) |
+| (istege bagli) | `gray` | Gri tonlama — asagida |
+
+Varsayilan renkli ornek: `5050 8 30`.
+
+## Gri tonlama (istege bagli) — mantik
+
+**Ne zaman:** Dorduncu arguman **`gray`**, **`gri`** veya **`1`** verildiginde (buyuk/kucuk harf `gray` / `gri` icin fark etmez).
+
+**Nerede:** Sadece **Windows host** (`RemoteDesktop.Host`). Client degisikligi gerekmez; agdan gelen kare zaten gri tonlu JPEG olarak cozulur.
+
+**Akis (her kare):**
+
+1. Ekran **24 bpp RGB** bitmap olarak yakalanir (`CopyFromScreen`) — henuz renkli.
+2. Gri mod aciksa, bu bitmap **JPEG’e yazilmadan once** `Graphics.DrawImage` + **`ColorMatrix`** ile islenir.
+3. Matris, her piksel icin standart **luminance** (parlaklik) agirliklariyla tek bir gri deger uretir ve **R, G, B kanallarina ayni degeri** yazar:  
+   **Y ≈ 0,299·R + 0,587·G + 0,114·B** (ITU-R BT.601 benzeri yaklasim). Sonuc: goruntu **renksiz** (R = G = B), yani gri tonlama.
+4. Sonra her zamanki gibi **JPEG** sikistirilir ve TCP ile `Frame` paketi olarak gonderilir.
+
+**Neden:** Renk bilgisi (uc kanal arasindaki fark) kalktigi icin cogu sahnede **JPEG dosyasi bir miktar kuculebilir**; dar bant (hotspot, kalabalik Wi-Fi) icin **deneysel** bir secenek. Kazanc **icerige baglidir**; garanti sabit yuzde yok.
+
+**Konsol:** Host, JPEG kalite / PSNR satirinda modu **`[GRI]`** veya **`[RENK]`** ile gosterir.
+
+**Ornek komut:**
+
+```powershell
+dotnet run --project .\RemoteDesktop.Host\RemoteDesktop.Host.csproj -- 5050 8 30 gray
+```
 
 ## Notlar
 

@@ -30,9 +30,10 @@ int fps = args.Length > 1 && int.TryParse(args[1], out int parsedFps) ? parsedFp
 long quality = args.Length > 2 && long.TryParse(args[2], out long parsedQuality)
     ? Math.Clamp(parsedQuality, 25L, 90L)
     : jpegQuality;
+bool grayscaleMode = args.Length > 3 && IsGrayscaleArg(args[3]);
 int frameDelayMs = Math.Max(15, 1000 / Math.Max(1, fps));
 
-Console.WriteLine($"Host starting on port {port} at {fps} FPS, JPEG quality {quality}");
+Console.WriteLine($"Host starting on port {port} at {fps} FPS, JPEG quality {quality}" + (grayscaleMode ? ", gri tonlama" : string.Empty));
 
 TcpListener listener = new(IPAddress.Any, port);
 listener.Start();
@@ -52,7 +53,7 @@ while (true)
     try
     {
         using CancellationTokenSource clientCts = new();
-        Task senderTask = SendFramesLoopAsync(stream, frameDelayMs, quality, clientCts.Token);
+        Task senderTask = SendFramesLoopAsync(stream, frameDelayMs, quality, grayscaleMode, clientCts.Token);
         Task receiverTask = ReceiveInputLoopAsync(stream, clientCts.Token);
         Task completed = await Task.WhenAny(senderTask, receiverTask);
         clientCts.Cancel();
@@ -65,14 +66,14 @@ while (true)
     }
 }
 
-static async Task SendFramesLoopAsync(NetworkStream stream, int frameDelayMs, long quality, CancellationToken cancellationToken)
+static async Task SendFramesLoopAsync(NetworkStream stream, int frameDelayMs, long quality, bool grayscaleMode, CancellationToken cancellationToken)
 {
     while (!cancellationToken.IsCancellationRequested)
     {
         byte[] frame;
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            (frame, _, _, _, _) = CaptureWindowsFrameWithMetrics(quality, printStatusLine: true);
+            (frame, _, _, _, _) = CaptureWindowsFrameWithMetrics(quality, printStatusLine: true, grayscaleMode);
         }
         else
         {
@@ -294,10 +295,52 @@ static void SendUnicodeText(string text)
     }
 }
 
+static bool IsGrayscaleArg(string? arg)
+{
+    if (string.IsNullOrWhiteSpace(arg))
+    {
+        return false;
+    }
+
+    return arg.Equals("gray", StringComparison.OrdinalIgnoreCase)
+        || arg.Equals("gri", StringComparison.OrdinalIgnoreCase)
+        || arg == "1";
+}
+
 /// <summary>
-/// Ham ekrani JPEG'e cevirir; decode sonrasi piksellerle MSE/PSNR hesaplar (kayip olcum).
+/// Renkli ekrani luminance ile R=G=B olacak sekilde gri tonlamaya cevirir (JPEG oncesi).
 /// </summary>
-static (byte[] JpegBytes, double PsnrDb, double Mse, int JpegLength, int RawRgbLength) CaptureWindowsFrameWithMetrics(long quality, bool printStatusLine)
+static Bitmap ConvertToGrayscale(Bitmap color)
+{
+    Bitmap gray = new(color.Width, color.Height, PixelFormat.Format24bppRgb);
+    ColorMatrix matrix = new(new[]
+    {
+        new[] { 0.299f, 0.587f, 0.114f, 0f, 0f },
+        new[] { 0.299f, 0.587f, 0.114f, 0f, 0f },
+        new[] { 0.299f, 0.587f, 0.114f, 0f, 0f },
+        new[] { 0f, 0f, 0f, 1f, 0f },
+        new[] { 0f, 0f, 0f, 0f, 1f }
+    });
+
+    using Graphics g = Graphics.FromImage(gray);
+    using ImageAttributes ia = new();
+    ia.SetColorMatrix(matrix);
+    g.DrawImage(
+        color,
+        new Rectangle(0, 0, color.Width, color.Height),
+        0,
+        0,
+        color.Width,
+        color.Height,
+        GraphicsUnit.Pixel,
+        ia);
+    return gray;
+}
+
+/// <summary>
+/// Ham ekrani (istege bagli gri) JPEG'e cevirir; decode sonrasi MSE/PSNR hesaplar.
+/// </summary>
+static (byte[] JpegBytes, double PsnrDb, double Mse, int JpegLength, int RawRgbLength) CaptureWindowsFrameWithMetrics(long quality, bool printStatusLine, bool grayscaleMode)
 {
     int width = GetSystemMetrics(0);
     int height = GetSystemMetrics(1);
@@ -307,10 +350,25 @@ static (byte[] JpegBytes, double PsnrDb, double Mse, int JpegLength, int RawRgbL
     }
     Rectangle bounds = new(0, 0, width, height);
 
-    using Bitmap bitmap = new(bounds.Width, bounds.Height, PixelFormat.Format24bppRgb);
-    using Graphics g = Graphics.FromImage(bitmap);
-    g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);
+    using Bitmap screen = new(bounds.Width, bounds.Height, PixelFormat.Format24bppRgb);
+    using (Graphics g = Graphics.FromImage(screen))
+    {
+        g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);
+    }
 
+    if (!grayscaleMode)
+    {
+        return EncodeBitmapToJpegWithMetrics(screen, quality, printStatusLine, renkli: true);
+    }
+
+    using Bitmap gray = ConvertToGrayscale(screen);
+    return EncodeBitmapToJpegWithMetrics(gray, quality, printStatusLine, renkli: false);
+}
+
+static (byte[] JpegBytes, double PsnrDb, double Mse, int JpegLength, int RawRgbLength) EncodeBitmapToJpegWithMetrics(Bitmap bitmap, long quality, bool printStatusLine, bool renkli)
+{
+    int width = bitmap.Width;
+    int height = bitmap.Height;
     using MemoryStream ms = new();
     ImageCodecInfo jpegCodec = ImageCodecInfo.GetImageEncoders().First(codec => codec.MimeType == "image/jpeg");
     EncoderParameters encoderParameters = new(1);
@@ -331,8 +389,9 @@ static (byte[] JpegBytes, double PsnrDb, double Mse, int JpegLength, int RawRgbL
         double compressionRatio = jpegBytes.Length > 0 ? rawRgb / (double)jpegBytes.Length : 0.0;
         double qualityRatio = quality / 100.0;
         double aggressiveIndicator = (100.0 - quality) / 100.0;
+        string mode = renkli ? "RENK" : "GRI";
         Console.Write(
-            $"\rJPEG Q={quality} ({qualityRatio:P0} olcek) | PSNR={psnrDb:F2} dB | MSE={mse:F2} | " +
+            $"\r[{mode}] JPEG Q={quality} ({qualityRatio:P0} olcek) | PSNR={psnrDb:F2} dB | MSE={mse:F2} | " +
             $"JPEG {jpegBytes.Length / 1024.0:F1} KB / ham {rawRgb / 1024.0:F1} KB | sikistirma ~{compressionRatio:F1}x | " +
             $"agresiflik gostergesi {aggressiveIndicator:P0}   ");
     }

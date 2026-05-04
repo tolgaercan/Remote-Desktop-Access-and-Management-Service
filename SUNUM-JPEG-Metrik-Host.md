@@ -1,5 +1,9 @@
 # Host konsolunda JPEG metrikleri (PSNR / MSE)
 
+## Gri tonlama (istege bagli)
+
+Host’u `... -- 5050 8 30 gray` (veya `gri` / `1`) ile calistirirsan, JPEG’ten once ekran **luminance** ile **R=G=B** gri tonlamaya cevrilir. Konsol satirinda **`[GRI]`** etiketi gorunur; renk modunda **`[RENK]`**.
+
 ## Ne yapiyor?
 
 Windows host her karede:
